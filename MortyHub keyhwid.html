@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>KeyMaster • Sistema de Claves HWID para Roblox</title>
+    <!-- Tailwind CSS + Font Awesome + Google Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        body { background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%); min-height: 100vh; }
+        .glass-card {
+            background: rgba(15, 25, 35, 0.65);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 2rem;
+            transition: all 0.2s ease;
+        }
+        .key-badge {
+            background: rgba(0, 0, 0, 0.45);
+            font-family: 'Monaco', 'Menlo', monospace;
+            letter-spacing: 0.5px;
+        }
+        .hwid-tag {
+            background: rgba(59, 130, 246, 0.2);
+            border-left: 3px solid #3b82f6;
+            font-family: monospace;
+            word-break: break-all;
+        }
+        .btn-primary {
+            background: linear-gradient(95deg, #6366f1, #8b5cf6);
+            transition: all 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.4);
+        }
+        .scrollbar-custom::-webkit-scrollbar {
+            width: 5px;
+        }
+        .scrollbar-custom::-webkit-scrollbar-track {
+            background: #1e1b2e;
+            border-radius: 10px;
+        }
+        .scrollbar-custom::-webkit-scrollbar-thumb {
+            background: #6366f1;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div class="max-w-6xl mx-auto px-4 py-8 md:py-12">
+        <!-- Header & Brand -->
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+            <div class="flex items-center gap-3">
+                <div class="bg-gradient-to-tr from-indigo-500 to-purple-600 p-2.5 rounded-2xl shadow-lg">
+                    <i class="fas fa-key text-white text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">KeyMaster</h1>
+                    <p class="text-sm text-indigo-200/80">Sistema de claves + HWID para scripts de Roblox</p>
+                </div>
+            </div>
+            <div id="googleUserArea" class="flex items-center gap-3">
+                <!-- Botón de Google y perfil dinámico -->
+            </div>
+        </div>
+
+        <!-- Panel principal: solo visible tras login -->
+        <div id="dashboardPanel" class="glass-card p-5 md:p-7 hidden transition-all duration-300">
+            <!-- Notificaciones / alertas -->
+            <div id="toastMsg" class="fixed top-24 right-5 z-50 max-w-sm hidden transition-all"></div>
+            
+            <!-- Grid de gestión -->
+            <div class="flex flex-col lg:flex-row gap-7">
+                <!-- COLUMNA IZQUIERDA: Lista de claves y gestión -->
+                <div class="lg:w-2/3 space-y-6">
+                    <div class="flex flex-wrap justify-between items-center gap-3 border-b border-white/10 pb-4">
+                        <div>
+                            <h2 class="text-2xl font-semibold flex items-center gap-2"><i class="fas fa-database text-indigo-300"></i> Mis claves HWID</h2>
+                            <p class="text-sm text-indigo-200/60">Cada clave puede vincularse a una o múltiples HWID (hardware IDs)</p>
+                        </div>
+                        <button id="generateKeyBtn" class="btn-primary px-5 py-2.5 rounded-xl font-semibold text-sm shadow-md flex items-center gap-2">
+                            <i class="fas fa-plus-circle"></i> Generar nueva clave
+                        </button>
+                    </div>
+
+                    <!-- Listado dinámico de claves -->
+                    <div id="keysContainer" class="space-y-4 max-h-[480px] overflow-y-auto pr-1 scrollbar-custom">
+                        <!-- Aquí se renderizan las keys mediante JS -->
+                        <div class="text-center py-12 text-gray-400 italic flex flex-col items-center gap-2">
+                            <i class="fas fa-key text-4xl opacity-30"></i>
+                            <span>No hay claves aún. ¡Genera tu primera clave!</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- COLUMNA DERECHA: Utilidades + validador -->
+                <div class="lg:w-1/3 space-y-6">
+                    <!-- Panel de validación (simula endpoint) -->
+                    <div class="bg-black/30 rounded-2xl p-5 border border-white/10">
+                        <div class="flex items-center gap-2 border-b border-white/15 pb-2 mb-4">
+                            <i class="fas fa-shield-alt text-emerald-400"></i>
+                            <h3 class="font-bold text-lg">Validador de clave + HWID</h3>
+                        </div>
+                        <p class="text-xs text-gray-300 mb-3">Simula la consulta que haría tu script de Roblox para verificar acceso.</p>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-indigo-300 mb-1">Clave (Key)</label>
+                                <input type="text" id="validatorKey" placeholder="Ej: 7F3D-9A2B-C8E1" class="w-full bg-gray-800/70 border border-gray-600 rounded-xl px-4 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs uppercase tracking-wide text-indigo-300 mb-1">HWID (ID Hardware)</label>
+                                <input type="text" id="validatorHwid" placeholder="HWID-XXXXXXXXXXXX" class="w-full bg-gray-800/70 border border-gray-600 rounded-xl px-4 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <button id="validateBtn" class="w-full bg-indigo-700/50 hover:bg-indigo-600 transition py-2.5 rounded-xl font-medium text-white flex items-center justify-center gap-2"><i class="fas fa-check-circle"></i> Verificar acceso</button>
+                            <div id="validationResult" class="mt-3 text-sm text-center font-medium p-2 rounded-lg bg-gray-900/40 hidden"></div>
+                        </div>
+                    </div>
+
+                    <!-- Guía rápida / API info -->
+                    <div class="bg-black/30 rounded-2xl p-5 border border-white/10">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i class="fab fa-roblox text-rose-400"></i>
+                            <h3 class="font-bold">Integración para scripts</h3>
+                        </div>
+                        <p class="text-xs text-gray-300 leading-relaxed">Tu script de Roblox (o ejecutor) debe enviar la <strong>clave</strong> y el <strong>HWID</strong> a este sistema. Ejemplo de verificación:</p>
+                        <div class="bg-gray-950/70 rounded-lg p-3 mt-2 font-mono text-[11px] text-green-300 overflow-x-auto">
+                            -- Petición simulada (API)<br>
+                            local key = "ABCD-1234"<br>
+                            local hwid = "HWID-A1B2C3"<br>
+                            -- Respuesta true/false según coincidencia
+                        </div>
+                        <p class="text-xs text-gray-400 mt-3">✓ Gestión total desde este panel.<br>✓ Cada clave puede tener múltiples HWIDs autorizadas.</p>
+                    </div>
+
+                    <!-- Botón de limpiar datos (solo usuario) -->
+                    <button id="resetUserDataBtn" class="w-full text-sm bg-red-900/30 hover:bg-red-800/40 transition rounded-xl py-2.5 border border-red-500/30 flex items-center justify-center gap-2"><i class="fas fa-trash-alt"></i> Restablecer todas mis claves</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overlay sin login (pantalla de bienvenida) -->
+        <div id="loginPromptCard" class="glass-card p-8 text-center max-w-2xl mx-auto mt-12 transition-all">
+            <div class="flex justify-center mb-4">
+                <div class="bg-indigo-600/20 p-5 rounded-full">
+                    <i class="fas fa-google text-5xl text-indigo-300"></i>
+                </div>
+            </div>
+            <h2 class="text-3xl font-bold mb-3">Acceso al sistema de claves</h2>
+            <p class="text-gray-300 mb-6">Inicia sesión con Google para gestionar tus claves HWID, generar licencias y controlar el acceso a tus scripts de Roblox.</p>
+            <div id="googleSignInButton" class="flex justify-center"></div>
+            <p class="text-xs text-indigo-300/70 mt-6">🔐 Solo tú puedes ver y editar tus claves. Cada cuenta tiene su propio almacenamiento seguro.</p>
+        </div>
+    </div>
+
+    <!-- Google Identity Services Library -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <script>
+        // ======================= CONFIGURACIÓN GOOGLE OAUTH =======================
+        // 🔧 IMPORTANTE: Reemplaza con tu Client ID de Google (creado en Google Cloud Console)
+        // Para desarrollo local puedes usar este ID de prueba (localhost), pero para producción crea el tuyo.
+        // Puedes obtener uno en https://console.cloud.google.com/apis/credentials
+        const GOOGLE_CLIENT_ID = "1080626213757-6s2tqfgsg6dkigqssc5p1es8sfvhgi8g.apps.googleusercontent.com";  // ID demo genérico (localhost válido)
+        // Si no funciona, reemplázalo por tu propio Client ID OAuth 2.0 (tipo aplicación web)
+        
+        // ======================= ESTADO GLOBAL =======================
+        let currentUser = null;          // { id (sub), name, email, picture }
+        let userKeys = [];                // cada elemento: { id: string, key: string, hwids: array, createdAt: number }
+        
+        // Elementos DOM
+        const dashboardPanel = document.getElementById('dashboardPanel');
+        const loginPromptCard = document.getElementById('loginPromptCard');
+        const googleUserArea = document.getElementById('googleUserArea');
+        const keysContainer = document.getElementById('keysContainer');
+        const generateKeyBtn = document.getElementById('generateKeyBtn');
+        const validatorKey = document.getElementById('validatorKey');
+        const validatorHwid = document.getElementById('validatorHwid');
+        const validateBtn = document.getElementById('validateBtn');
+        const validationResultDiv = document.getElementById('validationResult');
+        const resetUserDataBtn = document.getElementById('resetUserDataBtn');
+
+        // Helper: notificaciones flotantes
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toastMsg');
+            if (!toast) return;
+            toast.innerHTML = `<div class="glass-card px-5 py-3 shadow-xl flex items-center gap-3 ${isError ? 'border-red-500' : 'border-green-500'} border-l-8">
+                <i class="${isError ? 'fas fa-exclamation-triangle text-red-400' : 'fas fa-check-circle text-green-400'}"></i>
+                <span class="text-sm font-medium">${message}</span>
+            </div>`;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3200);
+        }
+
+        // Guardar datos en localStorage bajo el userId único
+        function persistUserData() {
+            if (!currentUser) return;
+            const storageKey = `hwid_keys_${currentUser.id}`;
+            const dataToStore = {
+                keys: userKeys,
+                lastUpdated: Date.now()
+            };
+            localStorage.setItem(storageKey, JSON.stringify(dataToStore));
+        }
+
+        // Cargar datos desde localStorage
+        function loadUserData() {
+            if (!currentUser) return;
+            const storageKey = `hwid_keys_${currentUser.id}`;
+            const raw = localStorage.getItem(storageKey);
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (parsed.keys && Array.isArray(parsed.keys)) {
+                        userKeys = parsed.keys;
+                        // Asegurar estructura antigua compatibilidad (hwids siempre array)
+                        userKeys.forEach(k => { if (!k.hwids) k.hwids = []; if (!k.id) k.id = crypto.randomUUID?.() || Date.now()+Math.random(); });
+                        return;
+                    }
+                } catch(e) { console.warn(e); }
+            }
+            // Datos iniciales vacíos
+            userKeys = [];
+        }
+
+        // Función para renderizar todas las claves
+        function renderKeys() {
+            if (!keysContainer) return;
+            if (!userKeys.length) {
+                keysContainer.innerHTML = `<div class="text-center py-12 text-gray-400 italic flex flex-col items-center gap-2">
+                    <i class="fas fa-key text-4xl opacity-30"></i>
+                    <span>No hay claves aún. ¡Genera tu primera clave!</span>
+                </div>`;
+                return;
+            }
+
+            // Ordenar por fecha descendente (más recientes primero)
+            const sorted = [...userKeys].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+            keysContainer.innerHTML = sorted.map(keyObj => {
+                const keyId = keyObj.id;
+                const keyStr = keyObj.key;
+                const hwids = keyObj.hwids || [];
+                const createdAtDate = keyObj.createdAt ? new Date(keyObj.createdAt).toLocaleString() : 'fecha desconocida';
+                
+                return `
+                    <div class="bg-gray-900/40 rounded-2xl border border-gray-700/60 p-4 transition hover:border-indigo-500/40" data-key-id="${keyId}">
+                        <div class="flex flex-wrap justify-between items-start gap-2 mb-3">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="text-xs uppercase tracking-wider bg-indigo-950/60 px-2 py-0.5 rounded-full">Clave</span>
+                                    <code class="key-badge bg-black/60 px-3 py-1.5 rounded-lg text-sm font-bold text-cyan-300 break-all">${escapeHtml(keyStr)}</code>
+                                    <button class="copyKeyBtn text-gray-400 hover:text-white transition text-sm" data-key="${escapeHtml(keyStr)}"><i class="far fa-copy"></i></button>
+                                </div>
+                                <div class="text-[11px] text-gray-500 mt-1 flex items-center gap-2"><i class="far fa-calendar-alt"></i> ${escapeHtml(createdAtDate)}</div>
+                            </div>
+                            <button class="deleteKeyBtn text-red-400 hover:text-red-300 bg-red-950/30 hover:bg-red-900/40 text-sm rounded-xl px-3 py-1.5 transition" data-key-id="${keyId}"><i class="fas fa-trash-can"></i> Eliminar</button>
+                        </div>
+                        
+                        <!-- Lista de HWIDs vinculados -->
+                        <div class="mt-2 mb-3">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs font-semibold text-indigo-300"><i class="fas fa-microchip"></i> HWIDs autorizados (${hwids.length})</span>
+                                <button class="addHwidBtn text-xs bg-indigo-800/40 hover:bg-indigo-700/60 px-3 py-1 rounded-lg transition flex items-center gap-1" data-key-id="${keyId}"><i class="fas fa-plus-circle"></i> Vincular HWID</button>
+                            </div>
+                            <div class="space-y-2 max-h-32 overflow-y-auto pr-1 scrollbar-custom">
+                                ${hwids.length === 0 ? '<div class="text-gray-500 text-xs italic p-1">Sin HWID vinculados. Agrega uno para autorizar dispositivos.</div>' : ''}
+                                ${hwids.map(hwid => `
+                                    <div class="hwid-tag flex justify-between items-center bg-gray-800/50 px-3 py-1.5 rounded-lg text-xs">
+                                        <code class="font-mono text-gray-200 text-xs break-all">${escapeHtml(hwid)}</code>
+                                        <button class="removeHwidBtn text-red-400 hover:text-red-300 ml-2" data-key-id="${keyId}" data-hwid="${escapeHtml(hwid)}"><i class="fas fa-times-circle"></i></button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="text-right text-[11px] text-gray-500 border-t border-white/5 pt-2 mt-1">
+                            <i class="fas fa-info-circle"></i> Los scripts verifican clave + HWID
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Añadir event listeners a los botones dinámicos
+            document.querySelectorAll('.copyKeyBtn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const key = btn.getAttribute('data-key');
+                    if (key) {
+                        navigator.clipboard.writeText(key);
+                        showToast(`Clave copiada: ${key}`, false);
+                    }
+                });
+            });
+            document.querySelectorAll('.deleteKeyBtn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const keyId = btn.getAttribute('data-key-id');
+                    deleteKeyById(keyId);
+                });
+            });
+            document.querySelectorAll('.addHwidBtn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const keyId = btn.getAttribute('data-key-id');
+                    addHwidToKey(keyId);
+                });
+            });
+            document.querySelectorAll('.removeHwidBtn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const keyId = btn.getAttribute('data-key-id');
+                    const hwid = btn.getAttribute('data-hwid');
+                    removeHwidFromKey(keyId, hwid);
+                });
+            });
+        }
+
+        function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+        
+        // Generar clave aleatoria estilo licencia (grupos de 4)
+        function generateRandomKey() {
+            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
+            let segments = [];
+            for(let i=0; i<4; i++) {
+                let seg = "";
+                for(let j=0; j<4; j++) seg += chars.charAt(Math.floor(Math.random() * chars.length));
+                segments.push(seg);
+            }
+            return segments.join("-");
+        }
+        
+        // Crear nueva clave
+        function createNewKey() {
+            let newKeyStr = generateRandomKey();
+            // Evitar duplicados exactos (poco probable pero chequeo)
+            while (userKeys.some(k => k.key === newKeyStr)) {
+                newKeyStr = generateRandomKey();
+            }
+            const newKeyObj = {
+                id: crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36),
+                key: newKeyStr,
+                hwids: [],
+                createdAt: Date.now()
+            };
+            userKeys.unshift(newKeyObj);
+            persistUserData();
+            renderKeys();
+            showToast(`✅ Nueva clave generada: ${newKeyStr}`, false);
+        }
+        
+        function deleteKeyById(keyId) {
+            if (confirm("⚠️ ¿Eliminar esta clave permanentemente? Los HWIDs asociados se perderán.")) {
+                userKeys = userKeys.filter(k => k.id !== keyId);
+                persistUserData();
+                renderKeys();
+                showToast("Clave eliminada correctamente", false);
+            }
+        }
+        
+        function addHwidToKey(keyId) {
+            const keyObj = userKeys.find(k => k.id === keyId);
+            if (!keyObj) return;
+            let newHwid = prompt("Ingrese el HWID (Hardware ID) que autorizará con esta clave:", "HWID-"+Math.random().toString(36).substring(2,10).toUpperCase());
+            if (newHwid && newHwid.trim() !== "") {
+                newHwid = newHwid.trim();
+                if (keyObj.hwids.includes(newHwid)) {
+                    showToast("⚠️ Este HWID ya está vinculado a la clave.", true);
+                } else {
+                    keyObj.hwids.push(newHwid);
+                    persistUserData();
+                    renderKeys();
+                    showToast(`🔗 HWID "${newHwid}" agregado a la clave ${keyObj.key}`, false);
+                }
+            }
+        }
+        
+        function removeHwidFromKey(keyId, hwidToRemove) {
+            const keyObj = userKeys.find(k => k.id === keyId);
+            if (keyObj) {
+                keyObj.hwids = keyObj.hwids.filter(h => h !== hwidToRemove);
+                persistUserData();
+                renderKeys();
+                showToast(`❌ HWID removido de la clave`, false);
+            }
+        }
+        
+        // RESET completo de datos del usuario
+        function resetAllUserKeys() {
+            if (confirm("⚠️ ¡ATENCIÓN! Esto ELIMINARÁ TODAS tus claves y HWIDs registrados. No se puede deshacer. ¿Continuar?")) {
+                userKeys = [];
+                persistUserData();
+                renderKeys();
+                showToast("Todos tus datos han sido restablecidos.", false);
+            }
+        }
+        
+        // Validador interactivo (simula endpoint del backend)
+        function validateAccess() {
+            const keyInput = validatorKey.value.trim();
+            const hwidInput = validatorHwid.value.trim();
+            if (!keyInput || !hwidInput) {
+                validationResultDiv.classList.remove('hidden');
+                validationResultDiv.innerHTML = '<span class="text-yellow-300"><i class="fas fa-exclamation-triangle"></i> Completa ambos campos (clave y HWID)</span>';
+                validationResultDiv.classList.add('block');
+                return;
+            }
+            const foundKey = userKeys.find(k => k.key === keyInput);
+            if (!foundKey) {
+                validationResultDiv.classList.remove('hidden');
+                validationResultDiv.innerHTML = '<span class="text-red-400"><i class="fas fa-times-circle"></i> ACCESO DENEGADO: La clave no existe.</span>';
+                validationResultDiv.classList.add('block');
+                return;
+            }
+            const hwidAuthorized = foundKey.hwids.includes(hwidInput);
+            if (hwidAuthorized) {
+                validationResultDiv.classList.remove('hidden');
+                validationResultDiv.innerHTML = '<span class="text-green-400"><i class="fas fa-check-circle"></i> ACCESO CONCEDIDO ✅ Clave válida y HWID autorizado.</span>';
+            } else {
+                validationResultDiv.classList.remove('hidden');
+                validationResultDiv.innerHTML = `<span class="text-red-400"><i class="fas fa-ban"></i> ACCESO DENEGADO: HWID no vinculado a esta clave. (HWID actual: ${escapeHtml(hwidInput)})</span>`;
+            }
+            validationResultDiv.classList.add('block');
+        }
+        
+        // ------------------- GOOGLE LOGIN HANDLER -------------------
+        function initGoogleLogin() {
+            if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID === "TU_CLIENT_ID_GOOGLE.apps.googleusercontent.com") {
+                console.warn("Client ID no configurado. Reemplaza GOOGLE_CLIENT_ID por uno válido.");
+                // No obstante, se mostrará el botón con advertencia en consola
+            }
+            google.accounts.id.initialize({
+                client_id: GOOGLE_CLIENT_ID,
+                callback: handleGoogleCredentialResponse,
+                auto_select: false,
+                cancel_on_tap_outside: true,
+            });
+            google.accounts.id.renderButton(
+                document.getElementById("googleSignInButton"),
+                { theme: "outline", size: "large", text: "continue_with", shape: "pill", width: 280 }
+            );
+            // Botón para logout (se mostrará dinámicamente)
+        }
+        
+        function handleGoogleCredentialResponse(response) {
+            const idToken = response.credential;
+            // Decodificar JWT para obtener info de usuario
+            try {
+                const payload = parseJwt(idToken);
+                if (payload && payload.sub) {
+                    currentUser = {
+                        id: payload.sub,
+                        email: payload.email,
+                        name: payload.name,
+                        picture: payload.picture,
+                    };
+                    // Cargar datos de localStorage según usuario
+                    loadUserData();
+                    renderKeys();
+                    updateUIBasedOnAuth(true);
+                    showToast(`Bienvenido/a ${currentUser.name}`, false);
+                } else {
+                    throw new Error("No se pudo obtener ID de usuario");
+                }
+            } catch(e) {
+                console.error(e);
+                showToast("Error al iniciar sesión con Google", true);
+            }
+        }
+        
+        function parseJwt(token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        }
+        
+        function logoutFromGoogle() {
+            if (currentUser) {
+                google.accounts.id.disableAutoSelect();
+                currentUser = null;
+                userKeys = [];
+                updateUIBasedOnAuth(false);
+                showToast("Sesión cerrada correctamente.", false);
+                // limpiar campos validador
+                if(validatorKey) validatorKey.value = "";
+                if(validatorHwid) validatorHwid.value = "";
+                if(validationResultDiv) validationResultDiv.classList.add('hidden');
+            }
+        }
+        
+        function updateUIBasedOnAuth(isLoggedIn) {
+            if (isLoggedIn && currentUser) {
+                loginPromptCard.classList.add('hidden');
+                dashboardPanel.classList.remove('hidden');
+                // Personalizar zona de usuario
+                googleUserArea.innerHTML = `
+                    <div class="flex items-center gap-3 bg-black/40 backdrop-blur-sm rounded-full pl-2 pr-4 py-1.5 border border-white/20">
+                        <img src="${currentUser.picture || 'https://ui-avatars.com/api/?background=6366f1&color=fff&name='+encodeURIComponent(currentUser.name)}" class="w-8 h-8 rounded-full border-2 border-indigo-400">
+                        <span class="text-sm font-medium hidden sm:inline-block">${escapeHtml(currentUser.name)}</span>
+                        <button id="logoutButton" class="text-xs bg-red-500/30 hover:bg-red-500/60 rounded-full px-3 py-1 transition"><i class="fas fa-sign-out-alt"></i> Salir</button>
+                    </div>
+                `;
+                const logoutBtn = document.getElementById('logoutButton');
+                if (logoutBtn) logoutBtn.addEventListener('click', logoutFromGoogle);
+            } else {
+                loginPromptCard.classList.remove('hidden');
+                dashboardPanel.classList.add('hidden');
+                googleUserArea.innerHTML = ` <div class="text-sm text-indigo-200/70"><i class="fas fa-lock"></i> Acceso con Google requerido</div>`;
+                // Limpiar contenedor claves
+                if(keysContainer) keysContainer.innerHTML = `<div class="text-center py-12 text-gray-400">Inicia sesión para gestionar claves.</div>`;
+            }
+        }
+        
+        // Inicializar eventos adicionales
+        function bindStaticEvents() {
+            if (generateKeyBtn) generateKeyBtn.addEventListener('click', () => { if(currentUser) createNewKey(); else showToast("Debes iniciar sesión", true); });
+            if (validateBtn) validateBtn.addEventListener('click', validateAccess);
+            if (resetUserDataBtn) resetUserDataBtn.addEventListener('click', () => { if(currentUser) resetAllUserKeys(); else showToast("Sin sesión activa", true); });
+        }
+        
+        // Verificar si hay sesión previa con Google One Tap? Lo manejamos con el callback normal.
+        // Cargar inicialización
+        window.addEventListener('load', () => {
+            bindStaticEvents();
+            if (typeof google !== 'undefined' && google.accounts) {
+                initGoogleLogin();
+                // Si el usuario ya tiene sesión con Google (posible one tap) se maneja automáticamente con el callback
+                // pero además se puede intentar verificar si ya hay datos guardados sin login? No.
+            } else {
+                console.error("Google Identity Services no cargó correctamente");
+                document.getElementById("googleSignInButton").innerHTML = "<span class='text-red-300'>Error al cargar Google Login. Revisa red o librería.</span>";
+            }
+        });
+    </script>
+</body>
+</html>
